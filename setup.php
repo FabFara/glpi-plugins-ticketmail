@@ -20,16 +20,16 @@
  *  You should have received a copy of the GNU General Public License
  *  along with ticketmail. If not, see <http://www.gnu.org/licenses/>.
  *  ---------------------------------------------------------------------
- *  @copyright Copyright © 2022-2023 probeSys'
+ *  @copyright Copyright © 2022-2024 probeSys'
  *  @license   http://www.gnu.org/licenses/agpl.txt AGPLv3+
  *  @link      https://github.com/Probesys/glpi-plugins-ticketmail
  *  @link      https://plugins.glpi-project.org/#/plugin/ticketmail
  *  ---------------------------------------------------------------------
  */
 
-define('TICKETMAIL_VERSION', '3.6.6');
-define('TICKETMAIL_MIN_GLPI_VERSION', '9.4');
-define('TICKETMAIL_MAX_GLPI_VERSION', '11.0');
+define('TICKETMAIL_VERSION', '3.7.0');
+define('TICKETMAIL_MIN_GLPI_VERSION', '11.0');
+define('TICKETMAIL_MAX_GLPI_VERSION', '11.99');
 if (!defined("PLUGIN_TICKETMAIL_DIR")) {
    define("PLUGIN_TICKETMAIL_DIR", Plugin::getPhpDir("ticketmail"));
 }
@@ -39,20 +39,20 @@ if (!defined("PLUGIN_TICKETMAIL_WEB_DIR")) {
 
 function plugin_version_ticketmail()
 {
-    return [	
-      'name'		=> "Ticket Mail",
-      'version'		=> TICKETMAIL_VERSION,
-      'author'          => '<a href="http://www.probesys.com">Probesys</a>',
-      'license'	 	=> 'GPLv3+',
-      'homepage'	=> 'https://github.com/Probesys/glpi-plugins-vip',
-      'requirements'    => [
+    return [
+      'name'           => "Ticket Mail",
+      'version'        => TICKETMAIL_VERSION,
+      'author'         => '<a href="http://www.probesys.com">Probesys</a>',
+      'license'        => 'GPLv3+',
+      'homepage'       => 'https://github.com/Probesys/glpi-plugins-vip',
+      'requirements'   => [
          'glpi'   => [
             'min' => TICKETMAIL_MIN_GLPI_VERSION,
             'max' => TICKETMAIL_MAX_GLPI_VERSION,
          ],
          'php'    => [
-            'min' => '7.0'
-         ] 
+            'min' => '8.1'
+         ]
         ]
     ];
 }

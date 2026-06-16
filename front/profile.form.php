@@ -20,7 +20,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with ticketmail. If not, see <http://www.gnu.org/licenses/>.
  *  ---------------------------------------------------------------------
- *  @copyright Copyright © 2022-2023 probeSys'
+ *  @copyright Copyright © 2022-2024 probeSys'
  *  @license   http://www.gnu.org/licenses/agpl.txt AGPLv3+
  *  @link      https://github.com/Probesys/glpi-plugins-ticketmail
  *  @link      https://plugins.glpi-project.org/#/plugin/ticketmail
@@ -29,29 +29,35 @@
 
 include("../../../inc/includes.php");
 
-//Session::checkRight("profile","r");
-
 $prof = new PluginTicketmailProfile();
 
 if (isset($_POST['update_user_profile'])) {
-    //$prof->update($_POST);
     majDroit($_POST);
     Html::back();
 }
 
 /**
-* Fonction qui modifie les droits dans la base
-* @param type $arrayItem (id, right)
-*/
+ * Update profile rights in the database
+ */
 function majDroit($arrayItem)
 {
     global $DB;
-    //Mise à jour des droits
-    $query = "SELECT * FROM glpi_plugin_ticketmail_profiles WHERE id=".$arrayItem['id'];
-    if ($result = $DB->query($query)) {
-        if ($DB->numrows($result) > 0) {
-            $query = "UPDATE glpi_plugin_ticketmail_profiles SET show_ticketmail_onglet='".$arrayItem['show_ticketmail_onglet']."' WHERE id=".$arrayItem['id'];
-            $DB->query($query);
-        }
+
+    $id = (int)($arrayItem['id'] ?? 0);
+    if ($id <= 0) {
+        return;
+    }
+
+    $existing = $DB->request([
+        'FROM'  => 'glpi_plugin_ticketmail_profiles',
+        'WHERE' => ['id' => $id],
+    ]);
+
+    if (count($existing) > 0) {
+        $DB->update(
+            'glpi_plugin_ticketmail_profiles',
+            ['show_ticketmail_onglet' => $arrayItem['show_ticketmail_onglet']],
+            ['id' => $id]
+        );
     }
 }

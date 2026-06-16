@@ -20,7 +20,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with ticketmail. If not, see <http://www.gnu.org/licenses/>.
  *  ---------------------------------------------------------------------
- *  @copyright Copyright © 2022-2023 probeSys'
+ *  @copyright Copyright © 2022-2024 probeSys'
  *  @license   http://www.gnu.org/licenses/agpl.txt AGPLv3+
  *  @link      https://github.com/Probesys/glpi-plugins-ticketmail
  *  @link      https://plugins.glpi-project.org/#/plugin/ticketmail
@@ -31,16 +31,18 @@ function plugin_ticketmail_install()
 {
     global $DB;
 
-    $migration = new Migration(100);
+    $migration = new Migration(TICKETMAIL_VERSION);
 
     //Fresh install
     if (!$DB->tableExists('glpi_plugin_ticketmail_profiles')) {
         $query = "CREATE TABLE `glpi_plugin_ticketmail_profiles` (
-                `id` int(11) NOT NULL default '0' COMMENT 'RELATION to glpi_profiles (id)',
-                `show_ticketmail_onglet` char(1) collate utf8_unicode_ci default NULL,
+                `id` int NOT NULL default '0' COMMENT 'RELATION to glpi_profiles (id)',
+                `show_ticketmail_onglet` char(1) collate utf8mb4_unicode_ci default NULL,
                 PRIMARY KEY  (`id`)
-          ) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8mb4_unicode_ci;";
-        $DB->queryOrDie($query, $DB->error());
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;";
+        if (!$DB->query($query)) {
+            trigger_error($DB->error(), E_USER_ERROR);
+        }
 
         $migration->executeMigration();
 
@@ -51,16 +53,19 @@ function plugin_ticketmail_install()
     else {
         // Since v0.84 remove "profiles_id" column and use "id"
         if ($DB->fieldExists('glpi_plugin_ticketmail_profiles', 'profiles_id')) {
-            $drop_column_query = "ALTER TABLE glpi_plugin_ticketmail_profiles DROP COLUMN `id`;";
-            $rename_column_query = "ALTER TABLE glpi_plugin_ticketmail_profiles
-                                    CHANGE profiles_id id int(11) NOT NULL default '0'
-                                    COMMENT 'RELATION to glpi_profiles (id)';";
-            $DB->queryOrDie($drop_column_query, $DB->error());
-            $DB->queryOrDie($rename_column_query, $DB->error());
-            $add_primarykey_query = "ALTER TABLE glpi_plugin_ticketmail_profiles ADD PRIMARY KEY (id);";
-            $drop_old_index_query = "ALTER TABLE glpi_plugin_ticketmail_profiles DROP INDEX profiles_id;";
-            $DB->queryOrDie($add_primarykey_query, $DB->error());
-            $DB->queryOrDie($drop_old_index_query, $DB->error());
+            $queries = [
+                "ALTER TABLE glpi_plugin_ticketmail_profiles DROP COLUMN `id`;",
+                "ALTER TABLE glpi_plugin_ticketmail_profiles
+                    CHANGE profiles_id id int NOT NULL default '0'
+                    COMMENT 'RELATION to glpi_profiles (id)';",
+                "ALTER TABLE glpi_plugin_ticketmail_profiles ADD PRIMARY KEY (id);",
+                "ALTER TABLE glpi_plugin_ticketmail_profiles DROP INDEX profiles_id;",
+            ];
+            foreach ($queries as $q) {
+                if (!$DB->query($q)) {
+                    trigger_error($DB->error(), E_USER_ERROR);
+                }
+            }
         }
     }
     return true;

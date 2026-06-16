@@ -20,7 +20,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with ticketmail. If not, see <http://www.gnu.org/licenses/>.
  *  ---------------------------------------------------------------------
- *  @copyright Copyright © 2022-2023 probeSys'
+ *  @copyright Copyright © 2022-2024 probeSys'
  *  @license   http://www.gnu.org/licenses/agpl.txt AGPLv3+
  *  @link      https://github.com/Probesys/glpi-plugins-ticketmail
  *  @link      https://plugins.glpi-project.org/#/plugin/ticketmail
@@ -80,10 +80,6 @@ class PluginTicketmailProfile extends CommonDBTM {
             $target = $options['target'];
         }
 
-        /* if (!Session::haveRight("profile","r")) {
-          return false;
-          } */
-
         $profil = new Profile();
         if ($ID) {
             $this->getFromDB($ID);
@@ -125,11 +121,11 @@ class PluginTicketmailProfile extends CommonDBTM {
 
     public static function displayTabContentForItem(CommonGLPI $item, $tabnum = 1, $withtemplate = 0) {
         global $CFG_GLPI, $DB;
-        
+
         if ($item->getType() == 'Profile') {
             $profil = new self();
             $ID = $item->getField('id');
-            if (!$profil->GetfromDB($ID)) {
+            if (!$profil->getFromDB($ID)) {
                 $profil->createAccess($ID);
             }
             $profil->showForm($ID);
@@ -138,58 +134,56 @@ class PluginTicketmailProfile extends CommonDBTM {
             ?>
                <div align='center'>
                <?php
-               // Initialise les libellés :
-               $title = "Send";
-               
                $but_label = __('Send','ticketmail');
                $but_name = "send";
-               $to = "To ";
                $subject = "";
                $body = "";
 
-               $query = "SELECT id, name, date, content FROM glpi_tickets WHERE id=" . $ID;
-
-               if ($result = $DB->query($query)) {
-                   if ($DB->numrows($result) > 0) {
-                       $row = $DB->fetchAssoc($result);
-                       $subject = '[GLPI #'.str_pad($row['id'],7,'0',STR_PAD_LEFT).'] '.$row['name'];
-                       $body = '<h3>'.__('Content of the initial ticket','ticketmail').'</h3>';
-                       $body .= Html::convDateTime($row['date']) . "\n" . $row['content'] . "\n\n";
-                   }
+               $ticket_result = $DB->request([
+                   'SELECT' => ['id', 'name', 'date', 'content'],
+                   'FROM'   => 'glpi_tickets',
+                   'WHERE'  => ['id' => $ID],
+               ]);
+               if (count($ticket_result) > 0) {
+                   $row = $ticket_result->current();
+                   $subject = '[GLPI #'.str_pad($row['id'],7,'0',STR_PAD_LEFT).'] '.$row['name'];
+                   $body = '<h3>'.__('Content of the initial ticket','ticketmail').'</h3>';
+                   $body .= Html::convDateTime($row['date']) . "\n" . $row['content'] . "\n\n";
                }
-               // tickettasks and itilfollowups
-               $query = "SELECT date, content, is_private FROM glpi_tickettasks WHERE tickets_id=" . $ID 
-                       . " UNION SELECT date, content, is_private FROM glpi_itilfollowups WHERE itemtype='Ticket' AND items_id=" . $ID 
+
+               // tickettasks and itilfollowups (UNION query — not supported by $DB->request())
+               $ID_escaped = (int)$ID;
+               $union_query = "SELECT date, content, is_private FROM glpi_tickettasks WHERE tickets_id=" . $ID_escaped
+                       . " UNION SELECT date, content, is_private FROM glpi_itilfollowups WHERE itemtype='Ticket' AND items_id=" . $ID_escaped
                        . " ORDER BY date DESC";
-               if ($result = $DB->query($query)) {
+               $result = $DB->query($union_query);
+               if ($result) {
                    $body .= '<h3>'.__('Ticket tasks and followups associate to the ticket','ticketmail').'</h3>';
-                   if ($DB->numrows($result) > 0) {
-                       while ($row = $DB->fetchAssoc($result)) {
-                           if($row['is_private'] ==  1) {
-                               $body .= '<div class="is_private">';
-                           }
-                           $body .= '<br/>'.Html::convDateTime($row['date']) . ":\n" . $row['content'] . "\n\n";
-                           if($row['is_private'] ==  1) {
-                               $body .= '</div>';
-                           }
+                   while ($row = $result->fetch_assoc()) {
+                       if ($row['is_private'] == 1) {
+                           $body .= '<div class="is_private">';
+                       }
+                       $body .= '<br/>'.Html::convDateTime($row['date']) . ":\n" . $row['content'] . "\n\n";
+                       if ($row['is_private'] == 1) {
+                           $body .= '</div>';
                        }
                    }
                }
 
                $fromEmails = [$CFG_GLPI["admin_email"]];
-               $queryEmails = "SELECT email, realname, firstname FROM glpi_useremails um
-                LEFT JOIN glpi_users u ON um.users_id=u.id
-                WHERE um.users_id=".$_SESSION['glpiID'];
+               $email_result = $DB->request([
+                   'SELECT' => ['um.email', 'u.realname', 'u.firstname'],
+                   'FROM'   => 'glpi_useremails AS um',
+                   'LEFT JOIN' => [
+                       'glpi_users AS u' => ['FKEY' => ['um' => 'users_id', 'u' => 'id']],
+                   ],
+                   'WHERE'  => ['um.users_id' => $_SESSION['glpiID']],
+               ]);
+               foreach ($email_result as $row) {
+                   $fromEmails[] = $row['email'];
+               }
+               $fromEmails = array_unique($fromEmails);
 
-               if ($result = $DB->query($queryEmails)) {
-                    while ($row = $DB->fetchAssoc($result)) {
-                        $fromEmails[] = $row['email'];
-                    }
-                }
-                array_unique($fromEmails);
-
-
-               //Hide textbox for known user
                $onchange = '
 			if (this.value != 0) {
 			document.getElementById("address").style.display="none";
@@ -201,8 +195,6 @@ class PluginTicketmailProfile extends CommonDBTM {
 			}
 			';
 
-
-               // Affichage du formulaire : 
                ?>
                   <form method='post' action="<?php echo PLUGIN_TICKETMAIL_WEB_DIR . "/front/ticketmail.form.php"; ?>" >
                      <div class="spaced" id="tabsbody">
@@ -216,16 +208,17 @@ class PluginTicketmailProfile extends CommonDBTM {
                         <th><?php echo __('Email sender'); ?> : </th>
                            <td>
                                <select name="from" required='true'>
-                                   <?php 
+                                   <?php
                                    foreach ($fromEmails as $email) {
-                                     echo '<option value="'.$email.'">'.$email.'</option>';  
+                                     echo '<option value="'.htmlspecialchars($email, ENT_QUOTES).'">'
+                                          . htmlspecialchars($email, ENT_QUOTES) . '</option>';
                                    }
                                    ?>
                                </select>
                            </td>
                         </tr>
                         <tr class='tab_bg_1'>
-                           
+
                            <th><?php echo __('To','ticketmail'); ?> : </th>
                            <td>
                             <?php
@@ -245,7 +238,7 @@ class PluginTicketmailProfile extends CommonDBTM {
                         <tr class='tab_bg_1'>
                            <th><?php echo __('Subject','ticketmail'); ?> : </th>
                            <td>
-                              <input type='text' name='subject' maxlength='78' size='100' value='<?php echo $subject; ?>'>
+                              <input type='text' name='subject' maxlength='78' size='100' value='<?php echo htmlspecialchars($subject, ENT_QUOTES); ?>'>
                            </td>
                         </tr>
                         <tr class='tab_bg_1'>
@@ -267,13 +260,15 @@ class PluginTicketmailProfile extends CommonDBTM {
                <script>
                    <?php
                    $language = $_SESSION['glpilanguage'];
-                    if (!file_exists(GLPI_ROOT."/public/lib/tinymce-i18n/langs/$language.js")) {
-                       $language = $CFG_GLPI["languages"][$_SESSION['glpilanguage']][2];
-                       if (!file_exists(GLPI_ROOT."/public/lib/tinymce-i18n/langs/$language.js")) {
-                          $language = "en_GB";
+                   $lang_path = GLPI_ROOT."/public/lib/tinymce-i18n/langs5/$language.js";
+                   if (!file_exists($lang_path)) {
+                       $language = $CFG_GLPI["languages"][$_SESSION['glpilanguage']][2] ?? 'en_GB';
+                       $lang_path = GLPI_ROOT."/public/lib/tinymce-i18n/langs5/$language.js";
+                       if (!file_exists($lang_path)) {
+                           $language = "en_GB";
                        }
-                    }
-                    $language_url = $CFG_GLPI['root_doc'] . '/public/lib/tinymce-i18n/langs/' . $language . '.js';
+                   }
+                   $language_url = $CFG_GLPI['root_doc'] . '/public/lib/tinymce-i18n/langs5/' . $language . '.js';
                    ?>
                    tinymce.init({
                       language_url: '<?php echo $language_url ?>',
@@ -281,16 +276,13 @@ class PluginTicketmailProfile extends CommonDBTM {
                               + 'onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onkeypress|'
                               + 'onkeydown|onkeyup]',
                       browser_spellcheck: true,
-                      mode: 'exact',
                       selector: '#ticketMailBody',
                       relative_urls: false,
                       remove_script_host: false,
                       entity_encoding: 'raw',
-                      paste_data_images: $('.fileupload').length,
                       menubar: false,
                       statusbar: false,
-                      skin_url: '<?php echo $CFG_GLPI['root_doc']; ?>/css/tiny_mce/skins/light',
-                      content_css: '<?php echo $CFG_GLPI['root_doc']; ?>/css/tiny_mce_custom.css'
+                      promotion: false,
                    });
                    $( "#hidePrivateTask" ).on( "click", function() {
                        $('#ticketMailBody_ifr').contents().find('.is_private').toggle();
@@ -303,13 +295,6 @@ class PluginTicketmailProfile extends CommonDBTM {
         return true;
     }
 
-    //TODO
-    /*
-      static function getName($userid) {
-      $query = "SELECT name FROM glpi_users WHERE id=".$userid;
-
-      }
-     */
     public static function getEmail($userid) {
         if (!UserEmail::getDefaultForUser($userid)) {
             return '';
@@ -332,4 +317,3 @@ function plugin_ticketmail_haveRight() {
         return false;
     }
 }
-
